@@ -7,7 +7,7 @@ def strip_armor(sig, dash_space=False):
     sig = sig.replace('- ----', '-'*5) if dash_space else sig
     sig = re.sub("-{5}BEGIN BITCOIN SIGNED MESSAGE-{5}", "", sig)
     sig = re.sub(
-        "\n-{5}BEGIN SIGNATURE-{5}[\n\dA-z+=/]+-{5}END BITCOIN SIGNED MESSAGE-{5}",
+        "\n+-{5}BEGIN SIGNATURE-{5}[\n\dA-z+=/]+-{5}END BITCOIN SIGNED MESSAGE-{5}\n*",
         "",
         sig
     )
@@ -56,20 +56,35 @@ def validate_enrollment(enrollment_signature_text):
     # if a[1]['master'] != a[1]['Master signing address']: a[0] = False #1
     return [a[0], a[1]['master']]
 
-# Note: If you want a dictionary of parsed values to be returned instead of a
-# string, simply replace the line marked '#2' with a[1]
 def validate_review(reviewer_text):
     a = verify_sig(reviewer_text)
     # if a[1]['master'] != a[1]['Master signing address']: a[0] = False #1
     return [
         a[0],
         a[1]['master'],
-        strip_armor(reviewer_text, dash_space=True) #2
+        strip_armor(reviewer_text).replace('- ----', '-----')
     ]
 
-# Because of the way the signatures are cleaned, these functions are
-# interchangable.
-validate_audit = validate_review
+def validate_audit(auditor_text):
+    a = verify_sig(auditor_text)
+    txt = strip_armor(auditor_text)
+    ret = ""
+    b = "- ----BEGIN BITCOIN SIGNED MESSAGE-----"
+    c = "- ----BEGIN SIGNATURE-----"
+    d = "- ----END BITCOIN SIGNED MESSAGE-----"
+    for line in txt.splitlines():
+        if line == b and ret.count(b[2:]) == 0:
+            line = line.replace('- ----', '-----')
+        elif line == c and ret.count(c[2:]) == 1:
+            line = line.replace('- ----', '-----')
+        elif line == d and ret.count(d[2:]) == 1:
+            line = line.replace('- ----', '-----')
+        ret += line + '\n'
+    return [
+        a[0],
+        a[1]['master'],
+        ret
+    ]
 
 if __name__ == "__main__":
     # enrollment sig
@@ -126,3 +141,8 @@ IMcU7MvLl7T+hY0mmMw6mblLstnXd9Ly36z7uYMqv7ZZEuZQOvuXN2GjYU0Nq4So9GKQRkQwIis7EiN6
     print(validate_enrollment(sig))
     print(validate_review(sig2))
     print(validate_audit(sig3))
+
+    # Passing the output through all of the functions
+    print(validate_audit(sig3)[0])
+    print(validate_review(validate_audit(sig3)[2])[0])
+    print(validate_enrollment(validate_review(validate_audit(sig3)[2])[2])[0])
